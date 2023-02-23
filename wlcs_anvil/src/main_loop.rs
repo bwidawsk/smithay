@@ -7,7 +7,7 @@ use std::{
 use smithay::{
     backend::{
         input::ButtonState,
-        renderer::{damage::DamageTrackedRenderer, element::AsRenderElements},
+        renderer::{damage::DamageTrackedRenderer, dummy::DummyRenderer, element::AsRenderElements},
     },
     input::pointer::{
         ButtonEvent, CursorImageAttributes, CursorImageStatus, MotionEvent, RelativeMotionEvent,
@@ -26,7 +26,7 @@ use smithay::{
 
 use anvil::{drawing::PointerElement, render::*, state::Backend, AnvilState, CalloopData, ClientState};
 
-use crate::{renderer::DummyRenderer, WlcsEvent};
+use crate::WlcsEvent;
 
 pub const OUTPUT_NAME: &str = "anvil";
 
@@ -64,7 +64,7 @@ pub fn run(channel: Channel<WlcsEvent>) {
         })
         .unwrap();
 
-    let mut renderer = crate::renderer::DummyRenderer::new();
+    let mut renderer = DummyRenderer::new();
 
     let mode = Mode {
         size: (800, 600).into(),
