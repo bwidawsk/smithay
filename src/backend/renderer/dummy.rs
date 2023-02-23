@@ -1,16 +1,24 @@
 use std::cell::Cell;
 
-use smithay::{
+use crate::{
     backend::{
-        allocator::{dmabuf::Dmabuf, Fourcc},
-        renderer::{
-            DebugFlags, Frame, ImportDma, ImportDmaWl, ImportEgl, ImportMem, ImportMemWl, Renderer, Texture,
-            TextureFilter,
-        },
+        allocator::dmabuf::Dmabuf,
+        renderer::{DebugFlags, Fourcc, Frame, ImportDma, ImportMem, Renderer, Texture, TextureFilter},
         SwapBuffersError,
     },
-    reexports::wayland_server::protocol::wl_buffer,
     utils::{Buffer, Physical, Rectangle, Size, Transform},
+};
+
+#[cfg(all(
+    feature = "wayland_frontend",
+    feature = "use_system_lib",
+    feature = "backend_egl",
+))]
+use crate::backend::renderer::ImportEgl;
+#[cfg(feature = "wayland_frontend")]
+use crate::{
+    backend::renderer::{ImportDmaWl, ImportMemWl},
+    reexports::wayland_server::protocol::wl_buffer,
     wayland::compositor::SurfaceData,
 };
 
@@ -79,6 +87,7 @@ impl ImportMem for DummyRenderer {
     }
 }
 
+#[cfg(feature = "wayland_frontend")]
 impl ImportMemWl for DummyRenderer {
     fn import_shm_buffer(
         &mut self,
@@ -86,7 +95,7 @@ impl ImportMemWl for DummyRenderer {
         surface: Option<&SurfaceData>,
         _damage: &[Rectangle<i32, Buffer>],
     ) -> Result<<Self as Renderer>::TextureId, <Self as Renderer>::Error> {
-        use smithay::wayland::shm::with_buffer_contents;
+        use crate::wayland::shm::with_buffer_contents;
         use std::ptr;
         let ret = with_buffer_contents(buffer, |ptr, len, data| {
             let offset = data.offset as u32;
@@ -99,7 +108,7 @@ impl ImportMemWl for DummyRenderer {
                 for w in 0..width {
                     let idx = (offset + w + h * stride) as usize;
                     assert!(idx < len);
-                    x |= unsafe { ptr::read(ptr.offset(idx as isize)) };
+                    x |= unsafe { ptr::read(ptr.add(idx)) };
                 }
             }
 
@@ -128,11 +137,16 @@ impl ImportDma for DummyRenderer {
     }
 }
 
+#[cfg(all(
+    feature = "wayland_frontend",
+    feature = "backend_egl",
+    feature = "use_system_lib"
+))]
 impl ImportEgl for DummyRenderer {
     fn bind_wl_display(
         &mut self,
-        _display: &smithay::reexports::wayland_server::DisplayHandle,
-    ) -> Result<(), smithay::backend::egl::Error> {
+        _display: &crate::reexports::wayland_server::DisplayHandle,
+    ) -> Result<(), crate::backend::egl::Error> {
         unimplemented!()
     }
 
@@ -140,20 +154,21 @@ impl ImportEgl for DummyRenderer {
         unimplemented!()
     }
 
-    fn egl_reader(&self) -> Option<&smithay::backend::egl::display::EGLBufferReader> {
+    fn egl_reader(&self) -> Option<&crate::backend::egl::display::EGLBufferReader> {
         unimplemented!()
     }
 
     fn import_egl_buffer(
         &mut self,
         _buffer: &wl_buffer::WlBuffer,
-        _surface: Option<&smithay::wayland::compositor::SurfaceData>,
+        _surface: Option<&crate::wayland::compositor::SurfaceData>,
         _damage: &[Rectangle<i32, Buffer>],
     ) -> Result<<Self as Renderer>::TextureId, <Self as Renderer>::Error> {
         unimplemented!()
     }
 }
 
+#[cfg(feature = "wayland_frontend")]
 impl ImportDmaWl for DummyRenderer {}
 
 pub struct DummyFrame {}

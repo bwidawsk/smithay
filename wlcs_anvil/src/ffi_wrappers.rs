@@ -2,6 +2,7 @@ use std::{
     io::{Error, ErrorKind},
     os::{
         fd::OwnedFd,
+        net::UnixStream,
         raw::{c_char, c_int},
         unix::{
             net::UnixStream,
@@ -19,9 +20,7 @@ use wayland_sys::{
     ffi_dispatch,
 };
 use wlcs_rs::{
-    ffi_display_server_api::{WlcsDisplayServer, WlcsIntegrationDescriptor, WlcsServerIntegration},
-    ffi_pointer_api::WlcsPointer,
-    ffi_touch_api::WlcsTouch,
+    ffi_display_server_api::{WlcsIntegrationDescriptor, WlcsServerIntegration},
     ffi_wrappers::wlcs_server,
     wlcs_server_integration, Wlcs,
 };
@@ -34,7 +33,6 @@ static DEVICE_ID: AtomicU32 = AtomicU32::new(0);
 
 struct AnvilDisplayServerHandle {
     server: Option<(Sender<WlcsEvent>, JoinHandle<()>)>,
-    next_device_id: u32,
 }
 
 impl Wlcs for AnvilDisplayServerHandle {
@@ -42,10 +40,7 @@ impl Wlcs for AnvilDisplayServerHandle {
     type Touch = TouchHandle;
 
     fn new() -> Self {
-        AnvilDisplayServerHandle {
-            server: None,
-            next_device_id: 1,
-        }
+        AnvilDisplayServerHandle { server: None }
     }
 
     fn start(&mut self) {
