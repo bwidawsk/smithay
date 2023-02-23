@@ -7,7 +7,7 @@ use std::{
 use smithay::{
     backend::{
         input::ButtonState,
-        renderer::{damage::DamageTrackedRenderer, dummy::DummyRenderer, element::AsRenderElements},
+        renderer::{damage::DamageTrackedRenderer, element::AsRenderElements, test::TestRenderer},
     },
     input::pointer::{
         ButtonEvent, CursorImageAttributes, CursorImageStatus, MotionEvent, RelativeMotionEvent,
@@ -64,7 +64,7 @@ pub fn run(channel: Channel<WlcsEvent>) {
         })
         .unwrap();
 
-    let mut renderer = DummyRenderer::new();
+    let mut renderer = TestRenderer::new();
 
     let mode = Mode {
         size: (800, 600).into(),
@@ -103,7 +103,7 @@ pub fn run(channel: Channel<WlcsEvent>) {
                 rectangle.loc.y + rectangle.size.h,
             ));
             input_method.with_surface(|surface| {
-                elements.extend(AsRenderElements::<DummyRenderer>::render_elements(
+                elements.extend(AsRenderElements::<TestRenderer>::render_elements(
                     &smithay::desktop::space::SurfaceTree::from_surface(surface),
                     &mut renderer,
                     position.to_physical_precise_round(scale),
@@ -143,7 +143,7 @@ pub fn run(channel: Channel<WlcsEvent>) {
             // draw the dnd icon if any
             if let Some(surface) = state.dnd_icon.as_ref() {
                 if surface.alive() {
-                    elements.extend(AsRenderElements::<DummyRenderer>::render_elements(
+                    elements.extend(AsRenderElements::<TestRenderer>::render_elements(
                         &smithay::desktop::space::SurfaceTree::from_surface(surface),
                         &mut renderer,
                         cursor_pos_scaled,

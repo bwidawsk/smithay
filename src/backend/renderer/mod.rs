@@ -43,7 +43,7 @@ pub mod element;
 
 pub mod damage;
 
-pub mod dummy;
+pub mod test;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Texture filtering methods

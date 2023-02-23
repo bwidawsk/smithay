@@ -22,18 +22,18 @@ use crate::{
 ))]
 use crate::backend::renderer::ImportEgl;
 
-pub struct DummyRenderer {}
+pub struct TestRenderer {}
 
-impl DummyRenderer {
-    pub fn new() -> DummyRenderer {
-        DummyRenderer {}
+impl TestRenderer {
+    pub fn new() -> TestRenderer {
+        TestRenderer {}
     }
 }
 
-impl Renderer for DummyRenderer {
+impl Renderer for TestRenderer {
     type Error = SwapBuffersError;
-    type TextureId = DummyTexture;
-    type Frame<'a> = DummyFrame;
+    type TextureId = TestTexture;
+    type Frame<'a> = TestFrame;
 
     fn id(&self) -> usize {
         0
@@ -43,8 +43,8 @@ impl Renderer for DummyRenderer {
         &mut self,
         _size: Size<i32, Physical>,
         _dst_transform: Transform,
-    ) -> Result<DummyFrame, Self::Error> {
-        Ok(DummyFrame {})
+    ) -> Result<TestFrame, Self::Error> {
+        Ok(TestFrame {})
     }
 
     fn upscale_filter(&mut self, _filter: TextureFilter) -> Result<(), Self::Error> {
@@ -62,7 +62,7 @@ impl Renderer for DummyRenderer {
     }
 }
 
-impl ImportMem for DummyRenderer {
+impl ImportMem for TestRenderer {
     fn import_memory(
         &mut self,
         _data: &[u8],
@@ -82,7 +82,7 @@ impl ImportMem for DummyRenderer {
     }
 }
 
-impl ImportMemWl for DummyRenderer {
+impl ImportMemWl for TestRenderer {
     fn import_shm_buffer(
         &mut self,
         buffer: &wl_buffer::WlBuffer,
@@ -112,13 +112,13 @@ impl ImportMemWl for DummyRenderer {
         });
 
         match ret {
-            Ok((width, height)) => Ok(DummyTexture { width, height }),
+            Ok((width, height)) => Ok(TestTexture { width, height }),
             Err(e) => Err(SwapBuffersError::TemporaryFailure(Box::new(e))),
         }
     }
 }
 
-impl ImportDma for DummyRenderer {
+impl ImportDma for TestRenderer {
     fn import_dmabuf(
         &mut self,
         _dmabuf: &Dmabuf,
@@ -133,7 +133,7 @@ impl ImportDma for DummyRenderer {
     feature = "backend_egl",
     feature = "use_system_lib"
 ))]
-impl ImportEgl for DummyRenderer {
+impl ImportEgl for TestRenderer {
     fn bind_wl_display(
         &mut self,
         _display: &crate::reexports::wayland_server::DisplayHandle,
@@ -160,13 +160,13 @@ impl ImportEgl for DummyRenderer {
 }
 
 #[cfg(feature = "wayland_frontend")]
-impl ImportDmaWl for DummyRenderer {}
+impl ImportDmaWl for TestRenderer {}
 
-pub struct DummyFrame {}
+pub struct TestFrame {}
 
-impl Frame for DummyFrame {
+impl Frame for TestFrame {
     type Error = SwapBuffersError;
-    type TextureId = DummyTexture;
+    type TextureId = TestTexture;
 
     fn id(&self) -> usize {
         0
@@ -198,12 +198,12 @@ impl Frame for DummyFrame {
 }
 
 #[derive(Clone)]
-pub struct DummyTexture {
+pub struct TestTexture {
     width: u32,
     height: u32,
 }
 
-impl Texture for DummyTexture {
+impl Texture for TestTexture {
     fn width(&self) -> u32 {
         self.width
     }
