@@ -1,3 +1,7 @@
+//! TestRenderer
+//!
+//! A renderer that doesn't do much but is useful for cases such as WLCS.
+#[cfg(feature = "wayland_frontend")]
 use std::cell::Cell;
 
 use crate::{
@@ -22,11 +26,20 @@ use crate::{
     wayland::compositor::SurfaceData,
 };
 
+/// Encapsulates a renderer that does no actual rendering
+#[derive(Debug)]
 pub struct TestRenderer {}
 
 impl TestRenderer {
+    /// Create a new TestRenderer
     pub fn new() -> TestRenderer {
         TestRenderer {}
+    }
+}
+
+impl Default for TestRenderer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -171,6 +184,8 @@ impl ImportEgl for TestRenderer {
 #[cfg(feature = "wayland_frontend")]
 impl ImportDmaWl for TestRenderer {}
 
+/// Frame implementation for TestRenderer
+#[derive(Debug)]
 pub struct TestFrame {}
 
 impl Frame for TestFrame {
@@ -215,7 +230,8 @@ impl Frame for TestFrame {
     }
 }
 
-#[derive(Clone)]
+/// Texture for a TestRenderer
+#[derive(Clone, Debug)]
 pub struct TestTexture {
     width: u32,
     height: u32,
