@@ -13,17 +13,17 @@ use crate::{
     wayland::compositor::SurfaceData,
 };
 
+#[cfg(all(
+    feature = "wayland_frontend",
+    feature = "use_system_lib",
+    feature = "backend_egl",
+))]
+use crate::backend::renderer::ImportEgl;
 #[cfg(feature = "wayland_frontend")]
 use crate::{
     backend::renderer::{ImportDmaWl, ImportMemWl},
     reexports::wayland_server::protocol::wl_buffer,
 };
-#[cfg(all(
-        feature = "wayland_frontend",
-        feature = "use_system_lib",
-        feature = "backend_egl",
-))]
-use crate::backend::renderer::ImportEgl;
 
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
