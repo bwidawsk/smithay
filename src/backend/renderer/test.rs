@@ -10,7 +10,7 @@ use crate::{
         SwapBuffersError,
     },
     utils::{Buffer, Physical, Rectangle, Size, Transform},
-    wayland::compositor::SurfaceData,
+    wayland::{self, compositor::SurfaceData, shm},
 };
 
 #[cfg(all(
@@ -37,7 +37,7 @@ impl TestRenderer {
 }
 
 impl Renderer for TestRenderer {
-    type Error = SwapBuffersError;
+    type Error = TestRendererError;
     type TextureId = TestTexture;
     type Frame<'a> = TestFrame;
 
@@ -119,7 +119,7 @@ impl ImportMemWl for TestRenderer {
 
         match ret {
             Ok((width, height)) => Ok(TestTexture { width, height }),
-            Err(e) => Err(SwapBuffersError::TemporaryFailure(Box::new(e))),
+            Err(e) => Err(TestRendererError::BufferAccessError(e)),
         }
     }
 }
@@ -158,7 +158,7 @@ impl ImportEgl for TestRenderer {
     fn import_egl_buffer(
         &mut self,
         _buffer: &wl_buffer::WlBuffer,
-        _surface: Option<&crate::wayland::compositor::SurfaceData>,
+        _surface: Option<&wayland::compositor::SurfaceData>,
         _damage: &[Rectangle<i32, Buffer>],
     ) -> Result<<Self as Renderer>::TextureId, <Self as Renderer>::Error> {
         unimplemented!()
@@ -173,7 +173,7 @@ impl ImportDmaWl for TestRenderer {}
 pub struct TestFrame {}
 
 impl Frame for TestFrame {
-    type Error = SwapBuffersError;
+    type Error = TestRendererError;
     type TextureId = TestTexture;
 
     fn id(&self) -> usize {
@@ -219,5 +219,21 @@ impl Texture for TestTexture {
 
     fn height(&self) -> u32 {
         self.height
+    }
+}
+
+/// Error returned during rendering using GL ES
+#[derive(thiserror::Error, Debug)]
+pub enum TestRendererError {
+    #[error("Error accessing the buffer ({0:?})")]
+    #[cfg(feature = "wayland_frontend")]
+    BufferAccessError(shm::BufferAccessError),
+}
+
+impl From<TestRendererError> for SwapBuffersError {
+    fn from(value: TestRendererError) -> Self {
+        match value {
+            x @ TestRendererError::BufferAccessError(_) => SwapBuffersError::TemporaryFailure(Box::new(x)),
+        }
     }
 }
