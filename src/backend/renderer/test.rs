@@ -1,12 +1,15 @@
 //! TestRenderer
 //!
 //! A renderer that doesn't do much but is useful for cases such as WLCS.
-use std::cell::Cell;
+use std::{cell::Cell, collections::HashMap};
 
 use crate::{
     backend::{
         allocator::dmabuf::Dmabuf,
-        renderer::{DebugFlags, Frame, ImportDma, ImportMem, Renderer, Texture, TextureFilter},
+        renderer::{
+            test, Bind, DebugFlags, Frame, ImportDma, ImportMem, Offscreen, Renderer, Texture, TextureFilter,
+            Unbind,
+        },
         SwapBuffersError,
     },
     utils::{Buffer, Physical, Rectangle, Size, Transform},
@@ -25,14 +28,32 @@ use crate::{
     reexports::wayland_server::protocol::wl_buffer,
 };
 
+crate::utils::ids::id_gen!(next_renderer_id, RENDERER_ID, RENDERER_IDS);
+
+#[derive(Debug)]
+enum Target {
+    Renderbuffer,
+}
+
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
-pub struct TestRenderer {}
+pub struct TestRenderer {
+    rbo: Option<TestRenderbuffer>,
+}
+
+#[derive(Debug, Eq, Hash, PartialEq)]
+struct RendererId(usize);
+
+impl Drop for RendererId {
+    fn drop(&mut self) {
+        RENDERER_IDS.lock().unwrap().remove(&self.0);
+    }
+}
 
 impl TestRenderer {
     /// Create a new TestRenderer
     pub fn new() -> TestRenderer {
-        TestRenderer {}
+        TestRenderer { rbo: None, fbo: vec![] }
     }
 }
 
@@ -168,6 +189,31 @@ impl ImportEgl for TestRenderer {
 #[cfg(feature = "wayland_frontend")]
 impl ImportDmaWl for TestRenderer {}
 
+impl Offscreen<TestRenderbuffer> for TestRenderer {
+    fn create_buffer(
+        &mut self,
+        size: Size<i32, Buffer>,
+    ) -> Result<TestRenderbuffer, <Self as Renderer>::Error> {
+        Ok(TestRenderbuffer {})
+    }
+}
+
+impl Bind<TestRenderbuffer> for TestRenderer {
+    fn bind(&mut self, target: TestRenderbuffer) -> Result<(), <Self as Renderer>::Error> {
+        self.rbo.replace(target);
+        Ok(())
+    }
+}
+
+impl Unbind for TestRenderer {
+    fn unbind(&mut self) -> Result<(), <Self as Renderer>::Error> {
+        self.rbo
+            .take()
+            .ok_or_else(|| TestRendererError::UnbindError("abc"))?;
+        Ok(())
+    }
+}
+
 /// Frame implementation for TestRenderer
 #[derive(Debug)]
 pub struct TestFrame {}
@@ -222,18 +268,26 @@ impl Texture for TestTexture {
     }
 }
 
+#[derive(Debug)]
+pub struct TestRenderbuffer {}
+
 /// Error returned during rendering using GL ES
 #[derive(thiserror::Error, Debug)]
 pub enum TestRendererError {
     #[error("Error accessing the buffer ({0:?})")]
     #[cfg(feature = "wayland_frontend")]
     BufferAccessError(shm::BufferAccessError),
+    /// Unbind was called for an unbound
+    #[error("Error unbinding ({0:?})")]
+    UnbindError(&'static str),
 }
 
 impl From<TestRendererError> for SwapBuffersError {
     fn from(value: TestRendererError) -> Self {
         match value {
-            x @ TestRendererError::BufferAccessError(_) => SwapBuffersError::TemporaryFailure(Box::new(x)),
+            x @ TestRendererError::BufferAccessError(_) | x @ TestRendererError::UnbindError(_) => {
+                SwapBuffersError::TemporaryFailure(Box::new(x))
+            }
         }
     }
 }
