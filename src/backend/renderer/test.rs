@@ -195,12 +195,7 @@ impl ImportEgl for TestRenderer {
 impl ImportDmaWl for TestRenderer {}
 
 #[derive(Debug)]
-enum Target {
-    Framebuffer,
-    Texture { txtr: TestTexture },
-}
-
-#[derive(Debug)]
+#[allow(missing_docs)]
 pub struct TestTextureMapping {}
 
 impl Texture for TestTextureMapping {
@@ -369,6 +364,20 @@ impl Bind<TestTexture> for TestRenderer {
     fn supported_formats(&self) -> Option<HashSet<allocator::Format>> {
         let format = DrmFormat {
             code: Fourcc::Abgr8888,
+            modifier: DrmModifier::Linear,
+        };
+        Some(HashSet::from([format]))
+    }
+}
+
+impl Bind<Dmabuf> for TestRenderer {
+    fn bind(&mut self, _target: Dmabuf) -> Result<(), <Self as Renderer>::Error> {
+        Ok(())
+    }
+
+    fn supported_formats(&self) -> Option<HashSet<crate::backend::allocator::Format>> {
+        let format = DrmFormat {
+            code: Fourcc::Xrgb8888,
             modifier: DrmModifier::Linear,
         };
         Some(HashSet::from([format]))
