@@ -56,7 +56,10 @@ impl Drop for RendererId {
 impl TestRenderer {
     /// Create a new TestRenderer
     pub fn new() -> TestRenderer {
-        TestRenderer { rbo: None, fbo: vec![] }
+        TestRenderer {
+            rbo: None,
+            fbo: vec![],
+        }
     }
 }
 
@@ -337,6 +340,12 @@ impl TextureMapping for TestTextureMapping {
 #[derive(Debug)]
 pub struct TestRenderbuffer {
     data: Vec<u8>,
+}
+
+impl Bind<Dmabuf> for TestRenderer {
+    fn bind(&mut self, target: Dmabuf) -> Result<(), <Self as Renderer>::Error> {
+        Ok(())
+    }
 }
 
 /// Error returned during rendering using GL ES
