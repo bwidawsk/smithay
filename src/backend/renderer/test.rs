@@ -7,8 +7,8 @@ use crate::{
     backend::{
         allocator::dmabuf::Dmabuf,
         renderer::{
-            test, Bind, DebugFlags, Frame, ImportDma, ImportMem, Offscreen, Renderer, Texture, TextureFilter,
-            Unbind,
+            test, Bind, DebugFlags, ExportMem, Frame, ImportDma, ImportMem, Offscreen, Renderer, Texture,
+            TextureFilter, TextureMapping, Unbind,
         },
         SwapBuffersError,
     },
@@ -32,13 +32,16 @@ crate::utils::ids::id_gen!(next_renderer_id, RENDERER_ID, RENDERER_IDS);
 
 #[derive(Debug)]
 enum Target {
-    Renderbuffer,
+    Framebuffer,
+    Renderbuffer { rbo: TestRenderbuffer },
+    Texture { txtr: TestTexture },
 }
 
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
 pub struct TestRenderer {
     rbo: Option<TestRenderbuffer>,
+    fbo: Vec<u8>,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -139,7 +142,9 @@ impl ImportMemWl for TestRenderer {
         });
 
         match ret {
-            Ok((width, height)) => Ok(TestTexture { size: (width, height).into() }),
+            Ok((width, height)) => Ok(TestTexture {
+                size: (width, height).into(),
+            }),
             Err(e) => Err(TestRendererError::BufferAccessError(e)),
         }
     }
@@ -194,7 +199,9 @@ impl Offscreen<TestRenderbuffer> for TestRenderer {
         &mut self,
         size: Size<i32, Buffer>,
     ) -> Result<TestRenderbuffer, <Self as Renderer>::Error> {
-        Ok(TestRenderbuffer {})
+        Ok(TestRenderbuffer {
+            data: Vec::with_capacity(TryInto::<usize>::try_into(size.w * size.h).unwrap() * 4),
+        })
     }
 }
 
@@ -211,6 +218,42 @@ impl Unbind for TestRenderer {
             .take()
             .ok_or_else(|| TestRendererError::UnbindError("abc"))?;
         Ok(())
+    }
+}
+
+impl ExportMem for TestRenderer {
+    type TextureMapping = TestTextureMapping;
+
+    fn copy_framebuffer(
+        &mut self,
+        region: Rectangle<i32, Buffer>,
+    ) -> Result<Self::TextureMapping, <Self as Renderer>::Error> {
+        Ok(TestTextureMapping {
+            target: Target::Framebuffer,
+            size: region.size,
+            data: self.fbo.clone(),
+        })
+    }
+
+    fn copy_texture(
+        &mut self,
+        texture: &Self::TextureId,
+        region: Rectangle<i32, Buffer>,
+    ) -> Result<Self::TextureMapping, Self::Error> {
+        Ok(TestTextureMapping {
+            size: region.size,
+            target: Target::Texture {
+                txtr: texture.clone(),
+            },
+            data: vec![],
+        })
+    }
+
+    fn map_texture<'a>(
+        &mut self,
+        texture_mapping: &'a Self::TextureMapping,
+    ) -> Result<&'a [u8], <Self as Renderer>::Error> {
+        Ok(texture_mapping.data.as_slice())
     }
 }
 
@@ -267,8 +310,34 @@ impl Texture for TestTexture {
     }
 }
 
+///
 #[derive(Debug)]
-pub struct TestRenderbuffer {}
+pub struct TestTextureMapping {
+    target: Target,
+    size: Size<i32, Buffer>,
+    data: Vec<u8>,
+}
+
+impl Texture for TestTextureMapping {
+    fn width(&self) -> u32 {
+        self.size.w as u32
+    }
+
+    fn height(&self) -> u32 {
+        self.size.h as u32
+    }
+}
+
+impl TextureMapping for TestTextureMapping {
+    fn flipped(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug)]
+pub struct TestRenderbuffer {
+    data: Vec<u8>,
+}
 
 /// Error returned during rendering using GL ES
 #[derive(thiserror::Error, Debug)]
