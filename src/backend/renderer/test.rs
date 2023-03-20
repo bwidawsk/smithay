@@ -139,7 +139,7 @@ impl ImportMemWl for TestRenderer {
         });
 
         match ret {
-            Ok((width, height)) => Ok(TestTexture { width, height }),
+            Ok((width, height)) => Ok(TestTexture { size: (width, height).into() }),
             Err(e) => Err(TestRendererError::BufferAccessError(e)),
         }
     }
@@ -254,17 +254,16 @@ impl Frame for TestFrame {
 /// Texture for a TestRenderer
 #[derive(Clone, Debug)]
 pub struct TestTexture {
-    width: u32,
-    height: u32,
+    size: Size<u32, Buffer>,
 }
 
 impl Texture for TestTexture {
     fn width(&self) -> u32 {
-        self.width
+        self.size.w
     }
 
     fn height(&self) -> u32 {
-        self.height
+        self.size.h
     }
 }
 
