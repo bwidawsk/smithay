@@ -31,7 +31,7 @@ use crate::{
     wayland::compositor::SurfaceData,
 };
 
-use super::{Bind, Offscreen, Unbind};
+use super::{Bind, ExportMem, Offscreen, TextureMapping, Unbind};
 
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
@@ -193,6 +193,63 @@ impl ImportEgl for TestRenderer {
 
 #[cfg(feature = "wayland_frontend")]
 impl ImportDmaWl for TestRenderer {}
+
+#[derive(Debug)]
+enum Target {
+    Framebuffer,
+    Texture { txtr: TestTexture },
+}
+
+#[derive(Debug)]
+pub struct TestTextureMapping {}
+
+impl Texture for TestTextureMapping {
+    fn width(&self) -> u32 {
+        todo!()
+    }
+
+    fn height(&self) -> u32 {
+        todo!()
+    }
+
+    fn format(&self) -> Option<Fourcc> {
+        todo!()
+    }
+}
+
+impl TextureMapping for TestTextureMapping {
+    fn flipped(&self) -> bool {
+        true
+    }
+}
+
+impl ExportMem for TestRenderer {
+    type TextureMapping = TestTextureMapping;
+
+    fn copy_framebuffer(
+        &mut self,
+        _region: Rectangle<i32, Buffer>,
+        _format: Fourcc,
+    ) -> Result<Self::TextureMapping, <Self as Renderer>::Error> {
+        todo!()
+    }
+
+    fn copy_texture(
+        &mut self,
+        _texture: &Self::TextureId,
+        _region: Rectangle<i32, Buffer>,
+        _format: Fourcc,
+    ) -> Result<Self::TextureMapping, Self::Error> {
+        todo!()
+    }
+
+    fn map_texture<'a>(
+        &mut self,
+        _texture_mapping: &'a Self::TextureMapping,
+    ) -> Result<&'a [u8], <Self as Renderer>::Error> {
+        todo!()
+    }
+}
 
 /// Frame implementation for TestRenderer
 #[derive(Debug)]
