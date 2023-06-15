@@ -3,10 +3,13 @@
 //! A renderer that doesn't do much but is useful for cases such as WLCS.
 #[cfg(feature = "wayland_frontend")]
 use std::cell::Cell;
+use std::collections::HashSet;
+
+use drm_fourcc::{DrmFormat, DrmModifier};
 
 use crate::{
     backend::{
-        allocator::dmabuf::Dmabuf,
+        allocator::{self, dmabuf::Dmabuf},
         renderer::{DebugFlags, Fourcc, Frame, ImportDma, ImportMem, Renderer, Texture, TextureFilter},
         SwapBuffersError,
     },
@@ -25,6 +28,8 @@ use crate::{
     reexports::wayland_server::protocol::wl_buffer,
     wayland::compositor::SurfaceData,
 };
+
+use super::{Bind, Unbind};
 
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
@@ -247,6 +252,27 @@ impl Texture for TestTexture {
     }
 
     fn format(&self) -> Option<Fourcc> {
-        None
+        Some(Fourcc::Abgr8888)
+    }
+}
+
+impl Bind<TestTexture> for TestRenderer {
+    fn bind(&mut self, _target: TestTexture) -> Result<(), <Self as Renderer>::Error> {
+        self.unbind()?;
+        Ok(())
+    }
+
+    fn supported_formats(&self) -> Option<HashSet<allocator::Format>> {
+        let format = DrmFormat {
+            code: Fourcc::Abgr8888,
+            modifier: DrmModifier::Linear,
+        };
+        Some(HashSet::from([format]))
+    }
+}
+
+impl Unbind for TestRenderer {
+    fn unbind(&mut self) -> Result<(), <Self as Renderer>::Error> {
+        Ok(())
     }
 }
