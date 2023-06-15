@@ -1,9 +1,10 @@
 //! TestRenderer
 //!
 //! A renderer that doesn't do much but is useful for cases such as WLCS.
+use core::slice;
 #[cfg(feature = "wayland_frontend")]
 use std::cell::Cell;
-use std::collections::HashSet;
+use std::{borrow::Borrow, cell::RefCell, collections::HashSet, rc::Rc};
 
 use drm_fourcc::{DrmFormat, DrmModifier};
 
@@ -30,7 +31,7 @@ use crate::{
     wayland::compositor::SurfaceData,
 };
 
-use super::{Bind, Unbind};
+use super::{Bind, Offscreen, Unbind};
 
 /// Encapsulates a renderer that does no actual rendering
 #[derive(Debug)]
@@ -136,13 +137,14 @@ impl ImportMemWl for TestRenderer {
                 data.data_map.get::<Cell<u8>>().unwrap().set(x);
             }
 
-            (width, height)
+            let mut buf = vec![0; len].into_boxed_slice();
+            let data_slice = unsafe { slice::from_raw_parts(ptr, len) };
+            buf.copy_from_slice(data_slice);
+            (width, height, buf)
         });
 
         match ret {
-            Ok((width, height)) => Ok(TestTexture {
-                size: Size::<u32, Buffer>::from((width, height)),
-            }),
+            Ok((width, height, buffer)) => Ok(TestTexture::from(width, height, buffer.to_vec())),
             Err(e) => Err(TestRendererError::BufferAccessError(e)),
         }
     }
@@ -240,17 +242,58 @@ impl Frame for TestFrame {
 
 /// Texture for a TestRenderer
 #[derive(Clone, Debug)]
-pub struct TestTexture {
+pub struct TestTexture(pub(super) Rc<RefCell<TestTextureInternal>>);
+
+impl TestTexture {
+    fn new(width: u32, height: u32) -> Self {
+        TestTexture(Rc::new(RefCell::new(TestTextureInternal {
+            size: Size::<u32, Buffer>::from((width, height)),
+            buffer: Vec::new(), // buffers are allocated lazily
+        })))
+    }
+
+    fn from(width: u32, height: u32, buffer: Vec<u8>) -> Self {
+        TestTexture(Rc::new(RefCell::new(TestTextureInternal {
+            size: Size::<u32, Buffer>::from((width, height)),
+            buffer,
+        })))
+    }
+
+    fn space(&self) -> usize {
+        <Rc<RefCell<TestTextureInternal>> as Borrow<RefCell<TestTextureInternal>>>::borrow(&self.0)
+            .borrow()
+            .buffer
+            .len()
+    }
+
+    fn allocate(&self) {
+        let w: usize = self.width().try_into().unwrap();
+        let h: usize = self.height().try_into().unwrap();
+        <Rc<RefCell<TestTextureInternal>> as Borrow<RefCell<TestTextureInternal>>>::borrow(&self.0)
+            .borrow_mut()
+            .buffer = vec![0; w * h * 4]
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct TestTextureInternal {
     size: Size<u32, Buffer>,
+    buffer: Vec<u8>,
 }
 
 impl Texture for TestTexture {
     fn width(&self) -> u32 {
-        self.size.w
+        <Rc<RefCell<TestTextureInternal>> as Borrow<RefCell<TestTextureInternal>>>::borrow(&self.0)
+            .borrow()
+            .size
+            .w
     }
 
     fn height(&self) -> u32 {
-        self.size.h
+        <Rc<RefCell<TestTextureInternal>> as Borrow<RefCell<TestTextureInternal>>>::borrow(&self.0)
+            .borrow()
+            .size
+            .h
     }
 
     fn format(&self) -> Option<Fourcc> {
@@ -259,8 +302,10 @@ impl Texture for TestTexture {
 }
 
 impl Bind<TestTexture> for TestRenderer {
-    fn bind(&mut self, _target: TestTexture) -> Result<(), <Self as Renderer>::Error> {
+    fn bind(&mut self, target: TestTexture) -> Result<(), <Self as Renderer>::Error> {
         self.unbind()?;
+        debug_assert_eq!(target.space(), 0);
+        target.allocate();
         Ok(())
     }
 
@@ -279,6 +324,23 @@ impl Unbind for TestRenderer {
     }
 }
 
+impl Offscreen<TestTexture> for TestRenderer {
+    fn create_buffer(
+        &mut self,
+        format: Fourcc,
+        size: Size<i32, Buffer>,
+    ) -> Result<TestTexture, <Self as Renderer>::Error> {
+        if format != Fourcc::Abgr8888 {
+            return Err(TestRendererError::UnsupportedPixelLayout);
+        }
+
+        Ok(TestTexture::new(
+            size.w.try_into().unwrap(),
+            size.h.try_into().unwrap(),
+        ))
+    }
+}
+
 /// Error returned during rendering using GL ES
 #[derive(thiserror::Error, Debug)]
 pub enum TestRendererError {
@@ -286,12 +348,16 @@ pub enum TestRendererError {
     #[error("Error accessing the buffer ({0:?})")]
     #[cfg(feature = "wayland_frontend")]
     BufferAccessError(shm::BufferAccessError),
+    /// Unknown pixel layout
+    #[error("Unsupported pixel layout")]
+    UnsupportedPixelLayout,
 }
 
 impl From<TestRendererError> for SwapBuffersError {
     fn from(value: TestRendererError) -> Self {
         match value {
             x @ TestRendererError::BufferAccessError(_) => SwapBuffersError::TemporaryFailure(Box::new(x)),
+            x @ TestRendererError::UnsupportedPixelLayout => SwapBuffersError::TemporaryFailure(Box::new(x)),
         }
     }
 }
