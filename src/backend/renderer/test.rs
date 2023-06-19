@@ -10,7 +10,7 @@ use drm_fourcc::{DrmFormat, DrmModifier};
 
 use crate::{
     backend::{
-        allocator::{self, dmabuf::Dmabuf},
+        allocator::{self, dmabuf::Dmabuf, format::get_bpp},
         renderer::{DebugFlags, Fourcc, Frame, ImportDma, ImportMem, Renderer, Texture, TextureFilter},
         SwapBuffersError,
     },
@@ -85,12 +85,18 @@ impl Renderer for TestRenderer {
 impl ImportMem for TestRenderer {
     fn import_memory(
         &mut self,
-        _data: &[u8],
-        _format: Fourcc,
-        _size: Size<i32, Buffer>,
+        data: &[u8],
+        format: Fourcc,
+        size: Size<i32, Buffer>,
         _flipped: bool,
-    ) -> Result<<Self as Renderer>::TextureId, <Self as Renderer>::Error> {
-        unimplemented!()
+    ) -> Result<TestTexture, TestRendererError> {
+        if data.len()
+            < (size.w * size.h) as usize
+                * (get_bpp(format).ok_or(TestRendererError::UnsupportedPixelFormat(format))? / 8)
+        {
+            return Err(TestRendererError::UnexpectedSize);
+        }
+        Ok(TestTexture::from(size.w as u32, size.h as u32, data.to_vec()))
     }
 
     fn update_memory(
@@ -417,6 +423,12 @@ pub enum TestRendererError {
     /// Unknown pixel layout
     #[error("Unsupported pixel layout")]
     UnsupportedPixelLayout,
+    /// The given buffer has an unsupported pixel format
+    #[error("Unsupported pixel format: {0:?}")]
+    UnsupportedPixelFormat(Fourcc),
+    /// The provided buffer's size did not match the requested one.
+    #[error("Error reading buffer, size is too small for the given dimensions")]
+    UnexpectedSize,
 }
 
 impl From<TestRendererError> for SwapBuffersError {
@@ -424,6 +436,10 @@ impl From<TestRendererError> for SwapBuffersError {
         match value {
             x @ TestRendererError::BufferAccessError(_) => SwapBuffersError::TemporaryFailure(Box::new(x)),
             x @ TestRendererError::UnsupportedPixelLayout => SwapBuffersError::TemporaryFailure(Box::new(x)),
+            x @ TestRendererError::UnsupportedPixelFormat(_) => {
+                SwapBuffersError::TemporaryFailure(Box::new(x))
+            }
+            x @ TestRendererError::UnexpectedSize => SwapBuffersError::TemporaryFailure(Box::new(x)),
         }
     }
 }
