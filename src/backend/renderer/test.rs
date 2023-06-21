@@ -15,7 +15,7 @@ use crate::{
         SwapBuffersError,
     },
     utils::{Buffer, Physical, Rectangle, Size, Transform},
-    wayland::shm,
+    wayland::{self, shm},
 };
 
 #[cfg(all(
