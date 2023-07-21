@@ -75,17 +75,7 @@ pub fn framebuffer_from_wayland_buffer<A: AsFd + 'static>(
     use_opaque: bool,
 ) -> Result<Option<GbmFramebuffer>, Error> {
     if let Ok(dmabuf) = crate::wayland::dmabuf::get_dmabuf(buffer) {
-        // From weston:
-        /* We should not import to KMS a buffer that has been allocated using no
-         * modifiers. Usually drivers use linear layouts to allocate with no
-         * modifiers, but this is not a rule. The driver could use, for
-         * instance, a tiling layout under the hood - and both Weston and the
-         * KMS driver can't know. So giving the buffer to KMS is not safe, as
-         * not knowing its layout can result in garbage being displayed. In
-         * short, importing a buffer to KMS requires explicit modifiers. */
-        if dmabuf.format().modifier != DrmModifier::Invalid {
-            return Ok(Some(framebuffer_from_dmabuf(drm, gbm, &dmabuf, use_opaque)?));
-        }
+        return Ok(Some(framebuffer_from_dmabuf(drm, gbm, &dmabuf, use_opaque)?));
     }
 
     #[cfg(all(feature = "backend_egl", feature = "use_system_lib"))]
