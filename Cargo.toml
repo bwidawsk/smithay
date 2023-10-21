@@ -68,6 +68,7 @@ scan_fmt = { version = "0.2.3", default-features = false }
 encoding_rs = { version = "0.8.33", optional = true }
 profiling = "1.0"
 smallvec = "1.11"
+pixman = { version = "0.1.0", path = "../pixman-rs/pixman" }
 
 [dev-dependencies]
 clap = { version = "4", features = ["derive"] }

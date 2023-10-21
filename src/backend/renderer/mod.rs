@@ -49,6 +49,8 @@ pub mod sync;
 #[cfg(feature = "renderer_test")]
 pub mod test;
 
+pub mod pixman;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Texture filtering methods
 pub enum TextureFilter {
