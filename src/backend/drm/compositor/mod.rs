@@ -2955,6 +2955,9 @@ where
         };
 
         let cursor_buffer_size = self.cursor_size.to_logical(1).to_buffer(1, Transform::Normal);
+
+        // Create a pixman image from the source cursor data. This will either be set by the
+        // client, or the compositor's choice.
         let (pdata, size, (format, width, height, stride)) = match element.underlying_storage(renderer) {
             Some(storage) => match storage {
                 UnderlyingStorage::Wayland(buffer) => {
