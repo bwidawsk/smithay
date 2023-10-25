@@ -2988,7 +2988,7 @@ where
             }
         };
 
-        let pixman_format = fourcc_to_pixman_format(format)?;
+        let cursor_format = fourcc_to_pixman_format(format)?;
         let cursor_src = match pixman::Image::from_bits(
             pixman_format,
             width,
