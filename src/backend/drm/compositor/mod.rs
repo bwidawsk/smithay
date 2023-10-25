@@ -2990,7 +2990,7 @@ where
 
         let cursor_format = fourcc_to_pixman_format(format)?;
         let cursor_src = match pixman::Image::from_bits(
-            pixman_format,
+            cursor_format,
             width,
             height,
             unsafe { slice::from_raw_parts_mut(pdata as *mut u32, size / 4) },
