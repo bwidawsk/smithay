@@ -133,6 +133,7 @@ use std::{
 use ::gbm::{BufferObject, BufferObjectFlags};
 use drm::control::{connector, crtc, framebuffer, plane, Mode, PlaneType};
 use drm_fourcc::{DrmFormat, DrmFourcc, DrmModifier};
+use image::ImageBuffer;
 use indexmap::IndexMap;
 use smallvec::SmallVec;
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
@@ -3006,6 +3007,16 @@ where
                 return None;
             }
         };
+
+        let buffer = ImageBuffer::<image::Rgba<u8>, _>::from_raw(
+            width as u32,
+            height as u32,
+            cursor_src.data().unwrap(),
+        )
+        .unwrap();
+        buffer
+            .save_with_format("foo.png", image::ImageFormat::Png)
+            .unwrap();
 
         let plane_format = fourcc_to_pixman_format(cursor_buffer.format().expect("FIXME")).expect("FIXME");
         match cursor_buffer.map_mut::<_, _, Result<(), pixman::CreateFailed>>(
