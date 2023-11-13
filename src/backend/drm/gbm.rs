@@ -1,7 +1,6 @@
 //! Utilities to attach [`framebuffer::Handle`]s to gbm backed buffers
 
 use std::os::unix::io::AsFd;
-use std::path::PathBuf;
 
 use thiserror::Error;
 
@@ -20,6 +19,7 @@ use crate::backend::allocator::Buffer;
 use crate::backend::{
     allocator::{
         dmabuf::Dmabuf,
+        dumb::DumbBuffer,
         format::{get_bpp, get_depth, get_opaque},
         Fourcc,
     },
@@ -27,7 +27,10 @@ use crate::backend::{
 };
 use crate::utils::DevPath;
 
-use super::Framebuffer;
+use super::{
+    dumb::{framebuffer_from_dumb_buffer_internal, AccessError},
+    Framebuffer,
+};
 
 /// A GBM backed framebuffer
 #[derive(Debug)]
@@ -176,39 +179,6 @@ pub fn framebuffer_from_dmabuf<A: AsFd + 'static>(
     })
 }
 
-/// Possible errors for attaching a [`framebuffer::Handle`] with [`framebuffer_from_bo`]
-#[derive(Debug, Error)]
-#[error("failed to add a framebuffer")]
-pub struct AccessError {
-    /// Error message associated to the access error
-    errmsg: &'static str,
-    /// Device on which the error was generated
-    dev: Option<PathBuf>,
-    /// Underlying device error
-    #[source]
-    pub source: drm::SystemError,
-}
-
-impl From<AccessError> for super::DrmError {
-    fn from(err: AccessError) -> Self {
-        super::DrmError::Access {
-            errmsg: err.errmsg,
-            dev: err.dev,
-            source: err.source,
-        }
-    }
-}
-
-impl TryFrom<super::DrmError> for AccessError {
-    type Error = super::DrmError;
-    fn try_from(err: super::DrmError) -> Result<Self, super::DrmError> {
-        match err {
-            super::DrmError::Access { errmsg, dev, source } => Ok(AccessError { errmsg, dev, source }),
-            err => Err(err),
-        }
-    }
-}
-
 /// Attach a [`framebuffer::Handle`] to an [`BufferObject`]
 #[profiling::function]
 pub fn framebuffer_from_bo<T>(
@@ -226,6 +196,22 @@ pub fn framebuffer_from_bo<T>(
         use_opaque,
     )
     .map(|(fb, format)| GbmFramebuffer {
+        _bo: None,
+        fb,
+        format,
+        drm: drm.clone(),
+    })
+}
+
+/// Attach a [`framebuffer::Handle`] to an [`DumbBuffer`]
+#[profiling::function]
+pub fn framebuffer_from_dumb_buffer(
+    drm: &DrmDeviceFd,
+    buffer: &DumbBuffer,
+    use_opaque: bool,
+) -> Result<GbmFramebuffer, AccessError> {
+    let (fb, format) = framebuffer_from_dumb_buffer_internal(drm, buffer, use_opaque)?;
+    Ok(GbmFramebuffer {
         _bo: None,
         fb,
         format,

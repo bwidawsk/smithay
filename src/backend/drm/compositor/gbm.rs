@@ -5,9 +5,15 @@ use std::os::unix::io::AsFd;
 use gbm::BufferObject;
 
 use super::{ExportBuffer, ExportFramebuffer};
-use crate::backend::drm::{
-    gbm::{framebuffer_from_bo, framebuffer_from_wayland_buffer, Error, GbmFramebuffer},
-    DrmDeviceFd,
+use crate::backend::{
+    allocator::dumb::DumbBuffer,
+    drm::{
+        gbm::{
+            framebuffer_from_bo, framebuffer_from_dumb_buffer, framebuffer_from_wayland_buffer, Error,
+            GbmFramebuffer,
+        },
+        DrmDeviceFd,
+    },
 };
 
 impl<A: AsFd + 'static, T> ExportFramebuffer<BufferObject<T>> for gbm::Device<A> {
@@ -27,6 +33,29 @@ impl<A: AsFd + 'static, T> ExportFramebuffer<BufferObject<T>> for gbm::Device<A>
                 framebuffer_from_wayland_buffer(drm, self, wl_buffer, use_opaque)
             }
             ExportBuffer::Allocator(buffer) => framebuffer_from_bo(drm, buffer, use_opaque)
+                .map_err(Error::Drm)
+                .map(Some),
+        }
+    }
+}
+
+impl<A: AsFd + 'static> ExportFramebuffer<DumbBuffer> for gbm::Device<A> {
+    type Framebuffer = GbmFramebuffer;
+    type Error = Error;
+
+    #[profiling::function]
+    fn add_framebuffer(
+        &self,
+        drm: &DrmDeviceFd,
+        buffer: ExportBuffer<'_, DumbBuffer>,
+        use_opaque: bool,
+    ) -> Result<Option<Self::Framebuffer>, Self::Error> {
+        match buffer {
+            #[cfg(feature = "wayland_frontend")]
+            ExportBuffer::Wayland(wl_buffer) => {
+                framebuffer_from_wayland_buffer(drm, self, wl_buffer, use_opaque)
+            }
+            ExportBuffer::Allocator(buffer) => framebuffer_from_dumb_buffer(drm, buffer, use_opaque)
                 .map_err(Error::Drm)
                 .map(Some),
         }

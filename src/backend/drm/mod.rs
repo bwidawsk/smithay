@@ -73,6 +73,7 @@
 #[cfg(all(feature = "wayland_frontend", feature = "backend_gbm"))]
 pub mod compositor;
 pub(crate) mod device;
+pub mod dumb;
 mod error;
 #[cfg(feature = "backend_gbm")]
 pub mod gbm;
