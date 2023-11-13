@@ -96,7 +96,12 @@ impl AsDmabuf for DumbBuffer {
 
     #[profiling::function]
     fn export(&self) -> Result<Dmabuf, Self::Error> {
-        let fd = unsafe { OwnedFd::from_raw_fd(self.fd.buffer_to_prime_fd(self.handle.handle(), 0)?) };
+        let fd = unsafe {
+            OwnedFd::from_raw_fd(self.fd.buffer_to_prime_fd(
+                self.handle().handle(),
+                (drm::control::OFlag::O_CLOEXEC | drm::control::OFlag::O_RDWR).bits() as u32,
+            )?)
+        };
         let mut builder = Dmabuf::builder(self.size(), self.format.code, DmabufFlags::empty());
         builder.add_plane(fd, 0, 0, self.handle.pitch(), Modifier::Linear);
         builder.build().ok_or(drm::SystemError::InvalidFileDescriptor)
