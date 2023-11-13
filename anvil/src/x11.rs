@@ -24,8 +24,8 @@ use smithay::{
         },
         egl::{EGLContext, EGLDisplay},
         renderer::{
-            damage::OutputDamageTracker, element::AsRenderElements, gles::GlesRenderer, Bind, ImportDma,
-            ImportMemWl,
+            damage::OutputDamageTracker, element::AsRenderElements, gles::GlesRenderer,
+            pixman::PixmanRenderer, Bind, ImportDma, ImportMemWl,
         },
         vulkan::{version::Version, Instance, PhysicalDevice},
         x11::{WindowBuilder, X11Backend, X11Event, X11Surface},
@@ -40,7 +40,7 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface, Display},
     },
-    utils::{DeviceFd, IsAlive, Scale},
+    utils::{DeviceFd, IsAlive, Scale, Transform},
     wayland::{
         compositor,
         dmabuf::{
@@ -58,7 +58,7 @@ pub struct X11Data {
     mode: Mode,
     // FIXME: If GlesRenderer is dropped before X11Surface, then the MakeCurrent call inside Gles2Renderer will
     // fail because the X11Surface is keeping gbm alive.
-    renderer: GlesRenderer,
+    renderer: PixmanRenderer,
     damage_tracker: OutputDamageTracker,
     surface: X11Surface,
     dmabuf_state: DmabufState,
@@ -146,37 +146,36 @@ pub fn run_x11() {
         None
     };
 
+    let modifier = vec![smithay::backend::allocator::Modifier::Linear];
+
     let surface = match vulkan_allocator {
         // Create the surface for the window.
         Some(vulkan_allocator) => handle
             .create_surface(
                 &window,
                 DmabufAllocator(vulkan_allocator),
-                context
-                    .dmabuf_render_formats()
-                    .iter()
-                    .map(|format| format.modifier),
+                modifier.iter().copied(),
             )
             .expect("Failed to create X11 surface"),
         None => handle
             .create_surface(
                 &window,
                 DmabufAllocator(GbmAllocator::new(device, GbmBufferFlags::RENDERING)),
-                context
-                    .dmabuf_render_formats()
-                    .iter()
-                    .map(|format| format.modifier),
+                modifier.iter().copied(),
             )
             .expect("Failed to create X11 surface"),
     };
 
-    #[cfg_attr(not(feature = "egl"), allow(unused_mut))]
-    let mut renderer = unsafe { GlesRenderer::new(context) }.expect("Failed to initialize renderer");
+    // #[cfg_attr(not(feature = "egl"), allow(unused_mut))]
+    // let mut renderer = unsafe { GlesRenderer::new(context) }.expect("Failed to initialize renderer");
 
-    #[cfg(feature = "egl")]
-    if renderer.bind_wl_display(&display.handle()).is_ok() {
-        info!("EGL hardware-acceleration enabled");
-    }
+    #[cfg_attr(not(feature = "egl"), allow(unused_mut))]
+    let renderer = PixmanRenderer::new().unwrap();
+
+    // #[cfg(feature = "egl")]
+    // if renderer.bind_wl_display(&display.handle()).is_ok() {
+    //     info!("EGL hardware-acceleration enabled");
+    // }
 
     let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
     let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
@@ -225,7 +224,12 @@ pub fn run_x11() {
         },
     );
     let _global = output.create_global::<AnvilState<X11Data>>(&display.handle());
-    output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+    output.change_current_state(
+        Some(mode),
+        None,
+        None,
+        Some((0, 0).into()),
+    );
     output.set_preferred(mode);
 
     let damage_tracker = OutputDamageTracker::from_output(&output);
@@ -323,7 +327,7 @@ pub fn run_x11() {
             }
 
             let mut cursor_guard = cursor_status.lock().unwrap();
-            let mut elements: Vec<CustomRenderElements<GlesRenderer>> = Vec::new();
+            let mut elements: Vec<CustomRenderElements<PixmanRenderer>> = Vec::new();
 
             // draw the cursor as relevant
             // reset the cursor if the surface is no longer alive
@@ -364,7 +368,7 @@ pub fn run_x11() {
             // draw the dnd icon if any
             if let Some(surface) = state.dnd_icon.as_ref() {
                 if surface.alive() {
-                    elements.extend(AsRenderElements::<GlesRenderer>::render_elements(
+                    elements.extend(AsRenderElements::<PixmanRenderer>::render_elements(
                         &smithay::desktop::space::SurfaceTree::from_surface(surface),
                         &mut backend_data.renderer,
                         cursor_pos_scaled,
