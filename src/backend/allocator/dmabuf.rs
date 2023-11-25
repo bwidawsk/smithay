@@ -12,6 +12,7 @@
 
 use calloop::generic::Generic;
 use calloop::{EventSource, Interest, Mode, PostAction};
+use rustix::ioctl::{Setter, WriteOpcode};
 
 use super::{Allocator, Buffer, Format, Fourcc, Modifier};
 use crate::utils::{Buffer as BufferCoords, Size};
@@ -250,6 +251,112 @@ impl Dmabuf {
         let source = DmabufSource::new(self.clone(), interest)?;
         let blocker = DmabufBlocker(source.signal.clone());
         Ok((blocker, source))
+    }
+
+    /// Map this dmabuf readable
+    pub fn map_readable(&self) -> Result<DmabufMapping, DmabufMappingFailed> {
+        self.map(rustix::mm::ProtFlags::READ)
+    }
+
+    /// Map this dmabuf read/writeable
+    pub fn map_writable(&self) -> Result<DmabufMapping, DmabufMappingFailed> {
+        self.map(rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE)
+    }
+
+    /// Sync access to this dmabuf
+    pub fn sync(&self, flags: DmaBufSyncFlags) -> std::io::Result<()> {
+        for plane in self.0.planes.iter() {
+            unsafe { rustix::ioctl::ioctl(&plane.fd, Setter::<DmaBufSync, _>::new(dma_buf_sync { flags })) }?;
+        }
+        Ok(())
+    }
+
+    fn map(&self, prot: rustix::mm::ProtFlags) -> Result<DmabufMapping, DmabufMappingFailed> {
+        if self.num_planes() != 1 {
+            return Err(DmabufMappingFailed::UnsupportedNumberOfPlanes);
+        }
+
+        let plane = &self.0.planes[0];
+        if plane.modifier != Modifier::Linear {
+            return Err(DmabufMappingFailed::UnsupportedModifier(plane.modifier));
+        }
+
+        let len = (plane.stride * self.0.size.h as u32) as usize;
+        let ptr = unsafe {
+            rustix::mm::mmap(
+                std::ptr::null_mut(),
+                len,
+                prot,
+                rustix::mm::MapFlags::SHARED,
+                &plane.fd,
+                plane.offset as u64,
+            )
+        }
+        .map_err(std::io::Error::from)?;
+        Ok(DmabufMapping { len, ptr })
+    }
+}
+
+/// Dmabuf mapping errors
+#[derive(Debug, thiserror::Error)]
+#[error("Mapping the dmabuf failed")]
+pub enum DmabufMappingFailed {
+    /// Only single plane buffers are supported
+    #[error("Only single plane buffers are supported")]
+    UnsupportedNumberOfPlanes,
+    /// Only linear buffers are supported
+    #[error("Only linear buffers are supported")]
+    UnsupportedModifier(Modifier),
+    /// Io error during map operation
+    Io(#[from] std::io::Error),
+}
+
+bitflags::bitflags! {
+    /// Flags for the [`Dmabuf::sync`](Dmabuf::sync) operation
+    #[derive(Copy, Clone)]
+    pub struct DmaBufSyncFlags: std::ffi::c_ulonglong {
+        /// Read from the dmabuf
+        const READ = 1 << 0;
+        /// Write to the dmabuf
+        #[allow(clippy::identity_op)]
+        const WRITE = 2 << 0;
+        /// Start of read/write
+        const START = 0 << 2;
+        /// End of read/write
+        const END = 1 << 2;
+    }
+}
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
+struct dma_buf_sync {
+    flags: DmaBufSyncFlags,
+}
+
+type DmaBufSync = WriteOpcode<b'b', 0, dma_buf_sync>;
+
+/// A mapping into a [`Dmabuf`]
+#[derive(Debug)]
+pub struct DmabufMapping {
+    ptr: *mut std::ffi::c_void,
+    len: usize,
+}
+
+impl DmabufMapping {
+    /// Access the raw pointer of the mapping
+    pub fn ptr(&self) -> *mut std::ffi::c_void {
+        self.ptr
+    }
+
+    /// Access the length of the mapping
+    pub fn length(&self) -> usize {
+        self.len
+    }
+}
+
+impl Drop for DmabufMapping {
+    fn drop(&mut self) {
+        let _ = unsafe { rustix::mm::munmap(self.ptr, self.len) };
     }
 }
 
